@@ -1,28 +1,52 @@
-import yfinance as yf  # noqa
-import pandas as pd  # noqa
-from backtesting import BacktestingEngine  # noqa
-from strategies.mean_reversion import MeanReversionStrategy  # noqa
+# main.py
+import argparse
+# my_trading_strategy.py
+from config import config
+from data_processing import fetch_historical_data, preprocess_data
+from risk_management import set_stop_loss, set_take_profit
+from monitoring import log_trades, generate_reports
+from historical_data import fetch_historical_data
+from data_preprocessing import preprocess_data
+from strategy_evaluation import backtest, optimize_strategy
+from execution import create_order, manage_positions
+from risk_management import set_stop_loss, set_take_profit
 
-# Define the trading parameters
-start_date = '2022-01-01'
-end_date = '2022-02-28'
-capital = 10000
-symbol = 'AAPL'
+def main():
+    parser = argparse.ArgumentParser(description='Algo Trading Bot')
+    parser.add_argument('--mode', choices=['backtest', 'live_trading'], required=True,
+                        help='Select the mode: backtest or live_trading')
+    args = parser.parse_args()
 
-# Download the historical data
-data = yf.download(symbol, start=start_date, end=end_date)
+    # 1. Fetch historical data
+    historical_data = fetch_historical_data(config.HISTORICAL_DATA_DIR, config.TIMEFRAME,
+                                            config.START_DATE, config.END_DATE)
 
-# Define the trading strategy
-class MyMeanReversionStrategy(MeanReversionStrategy):
-    def should_enter(self, data):
-        return super().should_enter(data) and data['volume'] > 100000
+    # 2. Preprocess data
+    preprocessed_data = preprocess_data(historical_data)
 
-# Create the backtesting engine
-backtesting_engine = BacktestingEngine(MyMeanReversionStrategy, capital)
+    if args.mode == 'backtest':
+        # 3. Evaluate and optimize strategy
+        backtest_results = backtest(preprocessed_data, config.INITIAL_CAPITAL, config.TRADING_FEE)
+        optimized_strategy = optimize_strategy(preprocessed_data, backtest_results)
 
-# Run the backtesting
-backtesting_engine.backtest(data, start_date, end_date)
+    elif args.mode == 'live_trading':
+        # 3. Set up risk management
+        stop_loss = set_stop_loss(config.STOP_LOSS_PERCENTAGE)
+        take_profit = set_take_profit(config.TAKE_PROFIT_PERCENTAGE)
 
-# Display the results
-results = backtesting_engine.get_results()
-print(results)
+        # 4. Connect to exchange and authenticate
+        exchange = connect_to_exchange(config.BYBIT_API_KEY, config.BYBIT_SECRET_KEY, config.USE_TESTNET)
+
+        # 5. Execute trading strategy
+        while True:
+            signals = generate_trading_signals(preprocessed_data)
+            for signal in signals:
+                order = create_order(exchange, signal)
+                manage_positions(exchange, order)
+
+            # 6. Monitor and log trades
+            log_trades(exchange)
+            generate_reports(exchange)
+
+if __name__ == '__main__':
+    main()
